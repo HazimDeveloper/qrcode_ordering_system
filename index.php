@@ -22,16 +22,12 @@ include 'includes/header.php';
         <div style="margin: 20px 0;">
             <a href="customer/menu.php" class="btn btn-secondary">View Menu</a>
             <a href="customer/book_table.php" class="btn btn-secondary">Book Table</a>
-            <a href="qr/demo.php" class="btn btn-secondary">🔳 Try QR Demo</a>
         </div>
     <?php else: ?>
         <div style="margin: 30px 0;">
             <a href="auth/login.php" class="btn" style="font-size: 20px; padding: 15px 30px;">
                 Login to Order
             </a>
-        </div>
-        <div style="margin: 20px 0;">
-            <a href="qr/demo.php" class="btn btn-secondary">🔳 Try QR Demo</a>
         </div>
         <p style="margin: 20px 0;">
             Don't have an account? <a href="auth/register.php">Register here</a>
@@ -65,18 +61,5 @@ include 'includes/header.php';
     </div>
 </div>
 
-<!-- QR Code Demo Section -->
-<div style="background: #e8f4f8; padding: 30px; border-radius: 8px; margin: 40px 0; text-align: center;">
-    <h2 style="margin-bottom: 20px;">🔳 Try Our QR System</h2>
-    <p style="font-size: 16px; margin-bottom: 20px;">
-        Experience our QR code ordering system right now! No need to visit the restaurant.
-    </p>
-    <a href="qr/demo.php" class="btn" style="font-size: 18px; padding: 12px 30px;">
-        Test QR Code Demo
-    </a>
-    <p style="font-size: 14px; color: #666; margin-top: 15px;">
-        See how customers will experience ordering from your tables
-    </p>
-</div>
 
 <?php include 'includes/footer.php'; ?>

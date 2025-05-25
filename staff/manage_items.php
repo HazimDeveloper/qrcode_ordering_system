@@ -325,7 +325,7 @@ include '../includes/header.php';
                 <!-- Item Image -->
                 <div style="height: 200px; background: #f8f9fa; display: flex; align-items: center; justify-content: center; overflow: hidden;">
                     <?php if (!empty($item['image'])): ?>
-                        <img src="<?php echo htmlspecialchars($item['image']); ?>" 
+                        <img src="../images/<?php echo htmlspecialchars($item['image']); ?>" 
                              alt="<?php echo htmlspecialchars($item['name']); ?>"
                              style="width: 100%; height: 100%; object-fit: cover;"
                              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">

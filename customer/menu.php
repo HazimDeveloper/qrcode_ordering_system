@@ -59,7 +59,7 @@ include '../includes/header.php';
 <div class="menu-grid">
     <?php foreach ($menu_items as $item): ?>
         <div class="menu-item">
-            <img src="https://via.placeholder.com/300x200?text=<?php echo urlencode($item['name']); ?>" 
+            <img src="../images/<?php echo urlencode($item['image']); ?>" 
                  alt="<?php echo htmlspecialchars($item['name']); ?>">
             <div class="menu-item-content">
                 <h3><?php echo htmlspecialchars($item['name']); ?></h3>
