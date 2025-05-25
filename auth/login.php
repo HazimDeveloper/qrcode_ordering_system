@@ -78,12 +78,6 @@ include '../includes/header.php';
             Register here
         </a>
     </p>
-    
-    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 20px;">
-        <strong>Demo Accounts:</strong><br>
-        Staff: admin / password<br>
-        Customer: customer1 / password
-    </div>
 </div>
 
 <?php include '../includes/footer.php'; ?>

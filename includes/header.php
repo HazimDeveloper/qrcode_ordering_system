@@ -81,8 +81,8 @@
                         <a href="#" class="dropbtn">👤 <?php echo htmlspecialchars($_SESSION['username'] ?? 'User'); ?></a>
                         <div class="dropdown-content">
                             <div style="padding: 10px; border-bottom: 1px solid #eee; background: #f8f9fa;">
-                                <strong><?php echo htmlspecialchars($_SESSION['username'] ?? 'User'); ?></strong><br>
-                                <small><?php echo isStaff() ? 'Staff Member' : 'Customer'; ?></small>
+                                <strong style="color: black;"><?php echo htmlspecialchars($_SESSION['username'] ?? 'User'); ?></strong><br>
+                                <small  style="color: black;"><?php echo isStaff() ? 'Staff Member' : 'Customer'; ?></small>
                             </div>
                             <a href="/qr-food-ordering/customer/order_history.php">📜 My Orders</a>
                             <a href="/qr-food-ordering/customer/book_table.php">📅 My Reservations</a>
@@ -96,7 +96,6 @@
                 <?php else: ?>
                     <!-- Guest Links -->
                     <li><a href="/qr-food-ordering/customer/menu.php">📋 Menu</a></li>
-                    <li><a href="/qr-food-ordering/qr/demo.php">🔳 QR Demo</a></li>
                     <li><a href="/qr-food-ordering/auth/login.php">🔑 Login</a></li>
                     <li><a href="/qr-food-ordering/auth/register.php">📝 Register</a></li>
                 <?php endif; ?>
