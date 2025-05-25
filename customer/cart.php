@@ -8,8 +8,8 @@ if (!isLoggedIn()) {
 $message = '';
 
 // Remove item from cart
-if ($_GET['remove']) {
-    $cart_id = $_GET['remove'];
+if (isset($_GET['remove']) && $_GET['remove']) {
+    $cart_id = (int)$_GET['remove'];
     $stmt = $pdo->prepare("DELETE FROM cart WHERE id = ? AND user_id = ?");
     $stmt->execute([$cart_id, $_SESSION['user_id']]);
     $message = 'Item removed from cart';
@@ -17,7 +17,7 @@ if ($_GET['remove']) {
 
 // Update quantity
 if ($_POST && isset($_POST['update_quantity'])) {
-    $cart_id = $_POST['cart_id'];
+    $cart_id = (int)$_POST['cart_id'];
     $quantity = (int)$_POST['quantity'];
     
     if ($quantity > 0) {
