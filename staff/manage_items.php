@@ -8,29 +8,89 @@ if (!isLoggedIn() || !isStaff()) {
 $message = '';
 $error = '';
 
+// Handle image upload
+function handleImageUpload($file) {
+    $upload_dir = '../images/';
+    $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    $max_size = 5 * 1024 * 1024; // 5MB
+    
+    // Check if directory exists, create if not
+    if (!file_exists($upload_dir)) {
+        mkdir($upload_dir, 0755, true);
+    }
+    
+    // Validate file
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        throw new Exception('Upload failed with error code: ' . $file['error']);
+    }
+    
+    if ($file['size'] > $max_size) {
+        throw new Exception('File size too large. Maximum 5MB allowed.');
+    }
+    
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    
+    if (!in_array($mime_type, $allowed_types)) {
+        throw new Exception('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.');
+    }
+    
+    // Generate unique filename
+    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $filename = 'menu_' . time() . '_' . uniqid() . '.' . $extension;
+    $filepath = $upload_dir . $filename;
+    
+    if (!move_uploaded_file($file['tmp_name'], $filepath)) {
+        throw new Exception('Failed to move uploaded file.');
+    }
+    
+    return $filename;
+}
+
 // Add new item
 if ($_POST && isset($_POST['add_item'])) {
     $name = trim($_POST['name']);
     $description = trim($_POST['description']);
     $price = (float)$_POST['price'];
     $category = trim($_POST['category']);
-    $image_url = trim($_POST['image_url']);
+    $image_filename = '';
     
     if (empty($name) || empty($description) || $price <= 0) {
         $error = 'Name, description are required and price must be greater than 0';
     } else {
-        // Check if item name already exists
-        $stmt = $pdo->prepare("SELECT id FROM menu_items WHERE name = ?");
-        $stmt->execute([$name]);
-        if ($stmt->fetch()) {
-            $error = 'An item with this name already exists';
-        } else {
-            $stmt = $pdo->prepare("INSERT INTO menu_items (name, description, price, category, image) VALUES (?, ?, ?, ?, ?)");
-            if ($stmt->execute([$name, $description, $price, $category, $image_url])) {
-                $message = 'Menu item added successfully!';
-            } else {
-                $error = 'Failed to add menu item';
+        try {
+            // Handle image upload
+            if (isset($_FILES['image_upload']) && $_FILES['image_upload']['error'] !== UPLOAD_ERR_NO_FILE) {
+                $image_filename = handleImageUpload($_FILES['image_upload']);
+            } elseif (!empty($_POST['image_url'])) {
+                // If URL provided instead of upload, validate it
+                $image_url = trim($_POST['image_url']);
+                if (filter_var($image_url, FILTER_VALIDATE_URL)) {
+                    // For URL, we'll store the full URL in the database
+                    $image_filename = $image_url;
+                } else {
+                    $error = 'Invalid image URL provided';
+                }
             }
+            
+            if (!$error) {
+                // Check if item name already exists
+                $stmt = $pdo->prepare("SELECT id FROM menu_items WHERE name = ?");
+                $stmt->execute([$name]);
+                if ($stmt->fetch()) {
+                    $error = 'An item with this name already exists';
+                } else {
+                    $stmt = $pdo->prepare("INSERT INTO menu_items (name, description, price, category, image, available) VALUES (?, ?, ?, ?, ?, 1)");
+                    if ($stmt->execute([$name, $description, $price, $category, $image_filename])) {
+                        $message = 'Menu item added successfully!';
+                    } else {
+                        $error = 'Failed to add menu item';
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $error = 'Error: ' . $e->getMessage();
         }
     }
 }
@@ -42,23 +102,51 @@ if ($_POST && isset($_POST['update_item'])) {
     $description = trim($_POST['description']);
     $price = (float)$_POST['price'];
     $category = trim($_POST['category']);
-    $image_url = trim($_POST['image_url']);
+    $current_image = $_POST['current_image'] ?? '';
+    $image_filename = $current_image; // Keep current image by default
     
     if (empty($name) || empty($description) || $price <= 0) {
         $error = 'Name, description are required and price must be greater than 0';
     } else {
-        // Check if another item has the same name
-        $stmt = $pdo->prepare("SELECT id FROM menu_items WHERE name = ? AND id != ?");
-        $stmt->execute([$name, $id]);
-        if ($stmt->fetch()) {
-            $error = 'Another item with this name already exists';
-        } else {
-            $stmt = $pdo->prepare("UPDATE menu_items SET name = ?, description = ?, price = ?, category = ?, image = ? WHERE id = ?");
-            if ($stmt->execute([$name, $description, $price, $category, $image_url, $id])) {
-                $message = 'Menu item updated successfully!';
-            } else {
-                $error = 'Failed to update menu item';
+        try {
+            // Handle image upload for update
+            if (isset($_FILES['edit_image_upload']) && $_FILES['edit_image_upload']['error'] !== UPLOAD_ERR_NO_FILE) {
+                // Delete old image if it's a local file (not URL)
+                if ($current_image && !filter_var($current_image, FILTER_VALIDATE_URL) && file_exists('../images/' . $current_image)) {
+                    unlink('../images/' . $current_image);
+                }
+                $image_filename = handleImageUpload($_FILES['edit_image_upload']);
+            } elseif (!empty($_POST['image_url']) && $_POST['image_url'] !== $current_image) {
+                // New URL provided
+                $image_url = trim($_POST['image_url']);
+                if (filter_var($image_url, FILTER_VALIDATE_URL)) {
+                    // Delete old local image if exists
+                    if ($current_image && !filter_var($current_image, FILTER_VALIDATE_URL) && file_exists('../images/' . $current_image)) {
+                        unlink('../images/' . $current_image);
+                    }
+                    $image_filename = $image_url;
+                } else {
+                    $error = 'Invalid image URL provided';
+                }
             }
+            
+            if (!$error) {
+                // Check if another item has the same name
+                $stmt = $pdo->prepare("SELECT id FROM menu_items WHERE name = ? AND id != ?");
+                $stmt->execute([$name, $id]);
+                if ($stmt->fetch()) {
+                    $error = 'Another item with this name already exists';
+                } else {
+                    $stmt = $pdo->prepare("UPDATE menu_items SET name = ?, description = ?, price = ?, category = ?, image = ? WHERE id = ?");
+                    if ($stmt->execute([$name, $description, $price, $category, $image_filename, $id])) {
+                        $message = 'Menu item updated successfully!';
+                    } else {
+                        $error = 'Failed to update menu item';
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $error = 'Error: ' . $e->getMessage();
         }
     }
 }
@@ -79,8 +167,17 @@ if ($_GET['delete'] ?? false) {
     if ($pending_orders > 0) {
         $error = "Cannot delete this item as it's part of $pending_orders pending order(s)";
     } else {
+        // Get the image filename before deleting
+        $stmt = $pdo->prepare("SELECT image FROM menu_items WHERE id = ?");
+        $stmt->execute([$id]);
+        $item_image = $stmt->fetchColumn();
+        
         $stmt = $pdo->prepare("DELETE FROM menu_items WHERE id = ?");
         if ($stmt->execute([$id])) {
+            // Delete the image file if it's a local file
+            if ($item_image && !filter_var($item_image, FILTER_VALIDATE_URL) && file_exists('../images/' . $item_image)) {
+                unlink('../images/' . $item_image);
+            }
             $message = 'Menu item deleted successfully!';
         } else {
             $error = 'Failed to delete menu item';
@@ -88,20 +185,39 @@ if ($_GET['delete'] ?? false) {
     }
 }
 
-// Toggle item availability
+// Toggle item availability - FIXED
 if ($_GET['toggle'] ?? false) {
     $id = (int)$_GET['toggle'];
-    $stmt = $pdo->prepare("UPDATE menu_items SET available = NOT available WHERE id = ?");
-    if ($stmt->execute([$id])) {
-        $message = 'Item availability updated!';
-    } else {
-        $error = 'Failed to update item availability';
+    
+    try {
+        // First get current availability status
+        $stmt = $pdo->prepare("SELECT available FROM menu_items WHERE id = ?");
+        $stmt->execute([$id]);
+        $current_status = $stmt->fetchColumn();
+        
+        if ($current_status !== false) {
+            // Toggle the status (convert to boolean first, then flip)
+            $new_status = $current_status ? 0 : 1;
+            
+            $stmt = $pdo->prepare("UPDATE menu_items SET available = ? WHERE id = ?");
+            if ($stmt->execute([$new_status, $id])) {
+                $status_text = $new_status ? 'available' : 'unavailable';
+                $message = "Item is now $status_text!";
+            } else {
+                $error = 'Failed to update item availability';
+            }
+        } else {
+            $error = 'Item not found';
+        }
+    } catch (Exception $e) {
+        $error = 'Database error: ' . $e->getMessage();
     }
 }
 
 // Get search and filter parameters
 $search = trim($_GET['search'] ?? '');
 $category_filter = $_GET['category'] ?? '';
+$availability_filter = $_GET['availability'] ?? '';
 $sort_by = $_GET['sort'] ?? 'name';
 $sort_order = $_GET['order'] ?? 'ASC';
 
@@ -120,10 +236,15 @@ if (!empty($category_filter)) {
     $params[] = $category_filter;
 }
 
+if ($availability_filter !== '') {
+    $where_conditions[] = "available = ?";
+    $params[] = (int)$availability_filter;
+}
+
 $where_clause = !empty($where_conditions) ? 'WHERE ' . implode(' AND ', $where_conditions) : '';
 
 // Validate sort parameters
-$valid_sorts = ['name', 'price', 'category', 'created_at'];
+$valid_sorts = ['name', 'price', 'category', 'created_at', 'available'];
 $sort_by = in_array($sort_by, $valid_sorts) ? $sort_by : 'name';
 $sort_order = ($sort_order === 'DESC') ? 'DESC' : 'ASC';
 
@@ -169,11 +290,11 @@ include '../includes/header.php';
 <h1>Manage Menu Items</h1>
 
 <?php if ($error): ?>
-    <div class="alert alert-error"><?php echo $error; ?></div>
+    <div class="alert alert-error"><?php echo htmlspecialchars($error); ?></div>
 <?php endif; ?>
 
 <?php if ($message): ?>
-    <div class="alert alert-success"><?php echo $message; ?></div>
+    <div class="alert alert-success"><?php echo htmlspecialchars($message); ?></div>
 <?php endif; ?>
 
 <!-- Statistics Cards -->
@@ -206,7 +327,7 @@ include '../includes/header.php';
 
 <!-- Search and Filter Form -->
 <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin: 20px 0;">
-    <form method="GET" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end;">
+    <form method="GET" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; align-items: end;">
         <div>
             <label for="search" style="display: block; margin-bottom: 5px; font-weight: bold;">Search Items:</label>
             <input type="text" name="search" id="search" placeholder="Search by name or description" 
@@ -226,11 +347,21 @@ include '../includes/header.php';
         </div>
         
         <div>
+            <label for="availability" style="display: block; margin-bottom: 5px; font-weight: bold;">Availability:</label>
+            <select name="availability" id="availability" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">All Items</option>
+                <option value="1" <?php echo $availability_filter === '1' ? 'selected' : ''; ?>>Available Only</option>
+                <option value="0" <?php echo $availability_filter === '0' ? 'selected' : ''; ?>>Unavailable Only</option>
+            </select>
+        </div>
+        
+        <div>
             <label for="sort" style="display: block; margin-bottom: 5px; font-weight: bold;">Sort By:</label>
             <select name="sort" id="sort" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                 <option value="name" <?php echo $sort_by === 'name' ? 'selected' : ''; ?>>Name</option>
                 <option value="price" <?php echo $sort_by === 'price' ? 'selected' : ''; ?>>Price</option>
                 <option value="category" <?php echo $sort_by === 'category' ? 'selected' : ''; ?>>Category</option>
+                <option value="available" <?php echo $sort_by === 'available' ? 'selected' : ''; ?>>Availability</option>
                 <option value="created_at" <?php echo $sort_by === 'created_at' ? 'selected' : ''; ?>>Date Added</option>
             </select>
         </div>
@@ -267,7 +398,7 @@ include '../includes/header.php';
 <!-- Add New Item Form (Hidden by default) -->
 <div id="addItemForm" style="display: none; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: 20px 0;">
     <h3 style="margin-bottom: 20px;">Add New Menu Item</h3>
-    <form method="POST" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+    <form method="POST" enctype="multipart/form-data" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
         <div class="form-group">
             <label for="add_name">Item Name: *</label>
             <input type="text" name="name" id="add_name" required maxlength="100">
@@ -284,8 +415,16 @@ include '../includes/header.php';
         </div>
         
         <div class="form-group">
-            <label for="add_image">Image URL:</label>
-            <input type="url" name="image_url" id="add_image" placeholder="https://example.com/image.jpg">
+            <label for="add_image_upload">Upload Image:</label>
+            <input type="file" name="image_upload" id="add_image_upload" accept="image/*" onchange="previewImage(this, 'add_preview')">
+            <small style="color: #666; display: block; margin-top: 5px;">Max 5MB. JPEG, PNG, GIF, WebP allowed.</small>
+            <div id="add_preview" style="margin-top: 10px;"></div>
+        </div>
+        
+        <div class="form-group">
+            <label for="add_image_url">OR Image URL:</label>
+            <input type="url" name="image_url" id="add_image_url" placeholder="https://example.com/image.jpg">
+            <small style="color: #666; display: block; margin-top: 5px;">Use either upload or URL, not both.</small>
         </div>
         
         <div class="form-group" style="grid-column: 1 / -1;">
@@ -305,7 +444,7 @@ include '../includes/header.php';
     <div style="text-align: center; padding: 50px; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
         <h3>No items found</h3>
         <p>No items match your search criteria.</p>
-        <?php if (!empty($search) || !empty($category_filter)): ?>
+        <?php if (!empty($search) || !empty($category_filter) || $availability_filter !== ''): ?>
             <a href="manage_items.php" class="btn">Clear Filters</a>
         <?php else: ?>
             <button onclick="showAddForm()" class="btn">Add Your First Item</button>
@@ -314,23 +453,33 @@ include '../includes/header.php';
 <?php else: ?>
     <div class="menu-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
         <?php foreach ($items as $item): ?>
-            <div class="menu-item" style="border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: relative;">
+            <div class="menu-item" style="border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: relative; opacity: <?php echo $item['available'] ? '1' : '0.7'; ?>;">
                 <!-- Availability Badge -->
-                <?php if (isset($item['available']) && !$item['available']): ?>
-                    <div style="position: absolute; top: 10px; right: 10px; background: #e74c3c; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; z-index: 1;">
+                <?php if (!$item['available']): ?>
+                    <div style="position: absolute; top: 10px; right: 10px; background: #e74c3c; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; z-index: 1; font-weight: bold;">
                         Unavailable
+                    </div>
+                <?php else: ?>
+                    <div style="position: absolute; top: 10px; right: 10px; background: #27ae60; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; z-index: 1; font-weight: bold;">
+                        Available
                     </div>
                 <?php endif; ?>
                 
                 <!-- Item Image -->
                 <div style="height: 200px; background: #f8f9fa; display: flex; align-items: center; justify-content: center; overflow: hidden;">
                     <?php if (!empty($item['image'])): ?>
-                        <img src="../images/<?php echo htmlspecialchars($item['image']); ?>" 
+                        <?php
+                        // Determine image source (URL or local file)
+                        $image_src = filter_var($item['image'], FILTER_VALIDATE_URL) 
+                            ? $item['image'] 
+                            : '../images/' . $item['image'];
+                        ?>
+                        <img src="<?php echo htmlspecialchars($image_src); ?>" 
                              alt="<?php echo htmlspecialchars($item['name']); ?>"
                              style="width: 100%; height: 100%; object-fit: cover;"
                              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                         <div style="display: none; width: 100%; height: 100%; background: #ecf0f1; align-items: center; justify-content: center; color: #7f8c8d;">
-                            📷 No Image
+                            📷 Image Not Found
                         </div>
                     <?php else: ?>
                         <div style="width: 100%; height: 100%; background: #ecf0f1; display: flex; align-items: center; justify-content: center; color: #7f8c8d;">
@@ -378,8 +527,8 @@ include '../includes/header.php';
                         
                         <a href="?toggle=<?php echo $item['id']; ?>" 
                            class="btn" style="padding: 8px; font-size: 12px; text-decoration: none; text-align: center; 
-                           background: <?php echo (isset($item['available']) && !$item['available']) ? '#27ae60' : '#f39c12'; ?>;">
-                            <?php echo (isset($item['available']) && !$item['available']) ? '✅ Enable' : '⏸️ Disable'; ?>
+                           background: <?php echo $item['available'] ? '#f39c12' : '#27ae60'; ?>;">
+                            <?php echo $item['available'] ? '⏸️ Disable' : '✅ Enable'; ?>
                         </a>
                         
                         <a href="?delete=<?php echo $item['id']; ?>" 
@@ -414,14 +563,15 @@ include '../includes/header.php';
 
 <!-- Edit Item Modal -->
 <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 600px; max-height: 80%; overflow-y: auto;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80%; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3>Edit Menu Item</h3>
             <button onclick="closeEditModal()" style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
         </div>
         
-        <form method="POST" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <form method="POST" enctype="multipart/form-data" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
             <input type="hidden" name="item_id" id="edit_id">
+            <input type="hidden" name="current_image" id="edit_current_image">
             
             <div class="form-group">
                 <label for="edit_name">Item Name: *</label>
@@ -439,8 +589,21 @@ include '../includes/header.php';
             </div>
             
             <div class="form-group">
-                <label for="edit_image">Image URL:</label>
-                <input type="url" name="image_url" id="edit_image">
+                <label for="edit_image_upload">Upload New Image:</label>
+                <input type="file" name="edit_image_upload" id="edit_image_upload" accept="image/*" onchange="previewImage(this, 'edit_preview')">
+                <small style="color: #666; display: block; margin-top: 5px;">Max 5MB. JPEG, PNG, GIF, WebP allowed.</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="edit_image_url">OR Image URL:</label>
+                <input type="url" name="image_url" id="edit_image_url" placeholder="https://example.com/image.jpg">
+                <small style="color: #666; display: block; margin-top: 5px;">Use either upload or URL, not both.</small>
+            </div>
+            
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label>Current Image:</label>
+                <div id="current_image_display" style="margin: 10px 0;"></div>
+                <div id="edit_preview" style="margin: 10px 0;"></div>
             </div>
             
             <div class="form-group" style="grid-column: 1 / -1;">
@@ -451,6 +614,7 @@ include '../includes/header.php';
             <div style="grid-column: 1 / -1; display: flex; gap: 10px;">
                 <button type="submit" name="update_item" class="btn">Update Item</button>
                 <button type="button" onclick="closeEditModal()" class="btn btn-secondary">Cancel</button>
+                <button type="button" onclick="removeCurrentImage()" class="btn" style="background: #e74c3c;">Remove Image</button>
             </div>
         </form>
     </div>
@@ -470,7 +634,9 @@ function showAddForm() {
 function hideAddForm() {
     document.getElementById('addItemForm').style.display = 'none';
     // Clear form
-    document.getElementById('addItemForm').querySelector('form').reset();
+    const form = document.getElementById('addItemForm').querySelector('form');
+    form.reset();
+    document.getElementById('add_preview').innerHTML = '';
 }
 
 function editItem(id, name, description, price, category, image) {
@@ -479,7 +645,34 @@ function editItem(id, name, description, price, category, image) {
     document.getElementById('edit_description').value = description;
     document.getElementById('edit_price').value = price;
     document.getElementById('edit_category').value = category || '';
-    document.getElementById('edit_image').value = image || '';
+    document.getElementById('edit_current_image').value = image || '';
+    
+    // Clear previous previews
+    document.getElementById('edit_preview').innerHTML = '';
+    document.getElementById('edit_image_url').value = '';
+    document.getElementById('edit_image_upload').value = '';
+    
+    // Display current image
+    const currentImageDisplay = document.getElementById('current_image_display');
+    if (image) {
+        const isUrl = image.startsWith('http');
+        const imageSrc = isUrl ? image : '../images/' + image;
+        
+        currentImageDisplay.innerHTML = `
+            <div style="border: 1px solid #ddd; padding: 10px; border-radius: 5px; background: #f9f9f9;">
+                <img src="${imageSrc}" alt="Current image" style="max-width: 200px; max-height: 150px; object-fit: cover; border-radius: 4px;">
+                <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Current: ${image}</p>
+            </div>
+        `;
+        
+        // If it's a URL, populate the URL field
+        if (isUrl) {
+            document.getElementById('edit_image_url').value = image;
+        }
+    } else {
+        currentImageDisplay.innerHTML = '<p style="color: #999; font-style: italic;">No current image</p>';
+    }
+    
     document.getElementById('editModal').style.display = 'block';
 }
 
@@ -487,12 +680,64 @@ function closeEditModal() {
     document.getElementById('editModal').style.display = 'none';
 }
 
+function removeCurrentImage() {
+    if (confirm('Are you sure you want to remove the current image?')) {
+        document.getElementById('edit_current_image').value = '';
+        document.getElementById('edit_image_url').value = '';
+        document.getElementById('current_image_display').innerHTML = '<p style="color: #999; font-style: italic;">Image will be removed</p>';
+    }
+}
+
+function previewImage(input, previewId) {
+    const preview = document.getElementById(previewId);
+    
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        
+        // Check file size (5MB limit)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File size too large. Maximum 5MB allowed.');
+            input.value = '';
+            preview.innerHTML = '';
+            return;
+        }
+        
+        // Check file type
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.');
+            input.value = '';
+            preview.innerHTML = '';
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.innerHTML = `
+                <div style="border: 1px solid #ddd; padding: 10px; border-radius: 5px; background: #f0fff0;">
+                    <img src="${e.target.result}" alt="Preview" style="max-width: 200px; max-height: 150px; object-fit: cover; border-radius: 4px;">
+                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Preview: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)</p>
+                </div>
+            `;
+        };
+        reader.readAsDataURL(file);
+        
+        // Clear URL input if file is selected
+        const urlInput = previewId === 'add_preview' ? 
+            document.getElementById('add_image_url') : 
+            document.getElementById('edit_image_url');
+        if (urlInput) urlInput.value = '';
+    } else {
+        preview.innerHTML = '';
+    }
+}
+
 function exportItems() {
     // Create CSV content
-    let csv = 'Name,Description,Price,Category,Available,Date Added\n';
+    let csv = 'Name,Description,Price,Category,Available,Image,Date Added\n';
     
     <?php foreach ($items as $item): ?>
-    csv += '"<?php echo addslashes($item['name']); ?>","<?php echo addslashes($item['description']); ?>",<?php echo $item['price']; ?>,"<?php echo addslashes($item['category'] ?? ''); ?>","<?php echo isset($item['available']) && $item['available'] ? 'Yes' : 'No'; ?>","<?php echo $item['created_at']; ?>"\n';
+    csv += '"<?php echo addslashes($item['name']); ?>","<?php echo addslashes($item['description']); ?>",<?php echo $item['price']; ?>,"<?php echo addslashes($item['category'] ?? ''); ?>","<?php echo $item['available'] ? 'Yes' : 'No'; ?>","<?php echo addslashes($item['image'] ?? ''); ?>","<?php echo $item['created_at']; ?>"\n';
     <?php endforeach; ?>
     
     // Download CSV
@@ -561,13 +806,30 @@ document.addEventListener('DOMContentLoaded', function() {
     itemCards.forEach(card => {
         card.style.transition = 'transform 0.2s, box-shadow 0.2s';
         card.addEventListener('mouseenter', function() {
-            this.style.transform = 'translateY(-5px)';
-            this.style.boxShadow = '0 5px 20px rgba(0,0,0,0.15)';
+            if (window.matchMedia && window.matchMedia('(hover: hover)').matches) {
+                this.style.transform = 'translateY(-5px)';
+                this.style.boxShadow = '0 5px 20px rgba(0,0,0,0.15)';
+            }
         });
         card.addEventListener('mouseleave', function() {
             this.style.transform = 'translateY(0)';
             this.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
         });
+    });
+    
+    // Handle image URL input changes
+    document.getElementById('add_image_url').addEventListener('input', function() {
+        if (this.value.trim()) {
+            document.getElementById('add_image_upload').value = '';
+            document.getElementById('add_preview').innerHTML = '';
+        }
+    });
+    
+    document.getElementById('edit_image_url').addEventListener('input', function() {
+        if (this.value.trim()) {
+            document.getElementById('edit_image_upload').value = '';
+            document.getElementById('edit_preview').innerHTML = '';
+        }
     });
 });
 
@@ -577,7 +839,9 @@ function saveFormData() {
     const formData = new FormData(form);
     const data = {};
     for (let [key, value] of formData.entries()) {
-        data[key] = value;
+        if (key !== 'image_upload') { // Don't save file input
+            data[key] = value;
+        }
     }
     localStorage.setItem('addItemFormData', JSON.stringify(data));
 }
@@ -588,7 +852,7 @@ function loadFormData() {
         const data = JSON.parse(saved);
         Object.keys(data).forEach(key => {
             const input = document.querySelector(`#addItemForm input[name="${key}"], #addItemForm textarea[name="${key}"]`);
-            if (input) {
+            if (input && key !== 'image_upload') {
                 input.value = data[key];
             }
         });
@@ -599,6 +863,116 @@ function loadFormData() {
 <?php if ($message && strpos($message, 'added successfully') !== false): ?>
 localStorage.removeItem('addItemFormData');
 <?php endif; ?>
+
+// Load saved data on page load
+document.addEventListener('DOMContentLoaded', loadFormData);
+
+// Save data on form input
+document.addEventListener('input', function(e) {
+    if (e.target.closest('#addItemForm')) {
+        saveFormData();
+    }
+});
+
+// Drag and drop functionality for image upload
+function setupDragAndDrop() {
+    const uploadAreas = [
+        { input: 'add_image_upload', preview: 'add_preview' },
+        { input: 'edit_image_upload', preview: 'edit_preview' }
+    ];
+    
+    uploadAreas.forEach(area => {
+        const input = document.getElementById(area.input);
+        if (input) {
+            const container = input.parentElement;
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                container.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                container.addEventListener(eventName, () => {
+                    container.style.background = '#e8f5e8';
+                    container.style.border = '2px dashed #27ae60';
+                }, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                container.addEventListener(eventName, () => {
+                    container.style.background = '';
+                    container.style.border = '';
+                }, false);
+            });
+            
+            container.addEventListener('drop', (e) => {
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    input.files = files;
+                    previewImage(input, area.preview);
+                }
+            }, false);
+        }
+    });
+}
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+// Initialize drag and drop
+document.addEventListener('DOMContentLoaded', setupDragAndDrop);
+
+// Bulk operations (future enhancement)
+function selectAllItems() {
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    checkboxes.forEach(cb => cb.checked = true);
+    updateBulkActions();
+}
+
+function updateBulkActions() {
+    const selected = document.querySelectorAll('.item-checkbox:checked');
+    const bulkActions = document.getElementById('bulk-actions');
+    if (bulkActions) {
+        bulkActions.style.display = selected.length > 0 ? 'block' : 'none';
+    }
+}
+
+// Image optimization suggestions
+function showImageTips() {
+    alert(`📸 Image Tips for Best Results:
+
+✅ Recommended:
+• Size: 800x600 pixels or larger
+• Format: JPEG for photos, PNG for graphics
+• File size: Under 2MB for faster loading
+• Good lighting and clear focus
+• Show the food clearly
+
+❌ Avoid:
+• Very large files (over 5MB)
+• Blurry or dark images
+• Images with watermarks
+• Screenshots of other websites`);
+}
+
+// Add image tips button
+document.addEventListener('DOMContentLoaded', function() {
+    const addForm = document.getElementById('addItemForm');
+    if (addForm) {
+        const tipsButton = document.createElement('button');
+        tipsButton.type = 'button';
+        tipsButton.textContent = '💡 Image Tips';
+        tipsButton.className = 'btn btn-secondary';
+        tipsButton.style.fontSize = '12px';
+        tipsButton.onclick = showImageTips;
+        
+        const uploadLabel = addForm.querySelector('label[for="add_image_upload"]');
+        if (uploadLabel) {
+            uploadLabel.appendChild(tipsButton);
+        }
+    }
+});
 </script>
 
 <?php include '../includes/footer.php'; ?>

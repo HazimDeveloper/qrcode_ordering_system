@@ -72,9 +72,8 @@ include '../includes/header.php';
         <div style="margin: 20px 0;">
             <a href="manage_items.php" class="btn" style="display: block; margin: 10px 0;">Manage Menu Items</a>
             <a href="manage_orders.php" class="btn" style="display: block; margin: 10px 0;">Manage Orders</a>
-            <a href="../qr/generate.php" class="btn" style="display: block; margin: 10px 0; background: #f39c12;">🔳 Generate QR Codes</a>
-            <a href="../qr/demo.php" class="btn btn-secondary" style="display: block; margin: 10px 0;">📱 Test QR Demo</a>
-        </div>
+            <a href="generate.php" class="btn" style="display: block; margin: 10px 0; background: #f39c12;">🔳 Generate QR Codes</a>
+         </div>
     </div>
     
     <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
@@ -128,10 +127,6 @@ include '../includes/header.php';
         <a href="../qr/generate.php" class="btn" style="text-decoration: none; padding: 15px; text-align: center;">
             🔳 Generate QR Codes<br>
             <small>Create QR codes for tables</small>
-        </a>
-        <a href="../qr/demo.php" class="btn btn-secondary" style="text-decoration: none; padding: 15px; text-align: center;">
-            📱 QR Demo<br>
-            <small>Test QR code scanning</small>
         </a>
         <a href="manage_orders.php?filter=dine-in" class="btn btn-secondary" style="text-decoration: none; padding: 15px; text-align: center;">
             🍽️ Table Orders<br>

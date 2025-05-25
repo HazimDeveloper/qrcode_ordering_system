@@ -71,7 +71,7 @@
                                 <a href="/qr-food-ordering/staff/dashboard.php">📊 Dashboard</a>
                                 <a href="/qr-food-ordering/staff/manage_orders.php">📋 Manage Orders</a>
                                 <a href="/qr-food-ordering/staff/manage_items.php">🍽️ Manage Items</a>
-                                <a href="/qr-food-ordering/qr/generate.php">🔳 QR Codes</a>
+                                <a href="/qr-food-ordering/staff/generate.php">🔳 QR Codes</a>
                             </div>
                         </li>
                     <?php endif; ?>
