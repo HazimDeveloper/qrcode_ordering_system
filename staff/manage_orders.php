@@ -9,6 +9,7 @@ $message = '';
 $error = '';
 
 // Update order status
+// At the top of the file, after the existing update code
 if ($_POST && isset($_POST['update_status'])) {
     $order_id = (int)$_POST['order_id'];
     $status = $_POST['status'];
@@ -18,7 +19,13 @@ if ($_POST && isset($_POST['update_status'])) {
         try {
             $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ?");
             if ($stmt->execute([$status, $order_id])) {
-                $message = 'Order status updated successfully!';
+                $message = 'Order status updated successfully! Order ID: ' . $order_id . ', New Status: ' . $status;
+                
+                // Verify the update
+                $verify = $pdo->prepare("SELECT status FROM orders WHERE id = ?");
+                $verify->execute([$order_id]);
+                $new_status = $verify->fetchColumn();
+                $message .= " | Verified new status: $new_status";
             } else {
                 $error = 'Failed to update order status';
             }
@@ -111,7 +118,7 @@ try {
     $stats = $stmt->fetch();
 
     // Count total orders for pagination
-    $count_sql = "SELECT COUNT(DISTINCT o.id) FROM orders o JOIN users u ON o.user_id = u.id $where_clause";
+    $count_sql = "SELECT COUNT(DISTINCT o.id) FROM orders o LEFT JOIN users u ON o.user_id = u.id $where_clause";
     $stmt = $pdo->prepare($count_sql);
     $stmt->execute($params);
     $total_orders = $stmt->fetchColumn();
@@ -119,11 +126,13 @@ try {
 
     // Get orders - using direct values for LIMIT and OFFSET since they can't be bound parameters
     $sql = "
-        SELECT o.*, u.username, u.email,
+        SELECT o.*, 
+               COALESCE(u.username, 'Guest') as username, 
+               COALESCE(u.email, o.customer_phone) as email,
                COUNT(oi.id) as item_count,
                SUM(oi.quantity) as total_items
         FROM orders o
-        JOIN users u ON o.user_id = u.id
+        LEFT JOIN users u ON o.user_id = u.id
         LEFT JOIN order_items oi ON o.id = oi.order_id
         $where_clause
         GROUP BY o.id
@@ -298,6 +307,11 @@ include '../includes/header.php';
                         <!-- Status Update Form -->
                         <form method="POST" style="margin-bottom: 10px;">
                             <input type="hidden" name="order_id" value="<?php echo (int)$order['id']; ?>">
+                            <input type="hidden" name="filter" value="<?php echo htmlspecialchars($filter); ?>">
+                            <input type="hidden" name="page" value="<?php echo (int)$page; ?>">
+                            <?php if (!empty($search)): ?>
+                                <input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>">
+                            <?php endif; ?>
                             <select name="status" style="width: 100%; padding: 6px; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px;">
                                 <option value="pending" <?php echo $order['status'] === 'pending' ? 'selected' : ''; ?>>📋 Pending</option>
                                 <option value="confirmed" <?php echo $order['status'] === 'confirmed' ? 'selected' : ''; ?>>✅ Confirmed</option>
@@ -344,12 +358,15 @@ include '../includes/header.php';
 </div>
 
 <script>
+// Comment out or remove this code
+/*
 // Auto-refresh every 30 seconds
 setInterval(function() {
     if (!document.querySelector('input:focus, select:focus')) {
         location.reload();
     }
 }, 30000);
+*/
 
 // Keyboard shortcuts
 document.addEventListener('keydown', function(e) {

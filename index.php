@@ -1,7 +1,4 @@
 <?php
-// ==============================================
-// FILE: index.php (Updated with QR demo links)
-// ==============================================
 require_once 'config/database.php';
 $page_title = 'QR Food Ordering Platform';
 include 'includes/header.php';
@@ -15,23 +12,23 @@ include 'includes/header.php';
     
     <?php if (isLoggedIn()): ?>
         <div style="margin: 30px 0;">
-            <a href="customer/select_order_type.php" class="btn" style="font-size: 20px; padding: 15px 30px;">
-                Start Ordering 🍕
+            <a href="customer/account_options.php" class="btn" style="font-size: 20px; padding: 15px 30px;">
+                My Account 👤
             </a>
         </div>
         <div style="margin: 20px 0;">
-            <a href="customer/menu.php" class="btn btn-secondary">View Menu</a>
-            <a href="customer/book_table.php" class="btn btn-secondary">Book Table</a>
+            <a href="customer/menu.php" class="btn btn-secondary">Order Food</a>
+            <a href="customer/book_table_enhanced.php" class="btn btn-secondary">Book Table</a>
         </div>
     <?php else: ?>
         <div style="margin: 30px 0;">
+            <a href="qr/scan.php" class="btn" style="font-size: 20px; padding: 15px 30px; margin-right: 10px;">
+                Scan QR & Order
+            </a>
             <a href="auth/login.php" class="btn" style="font-size: 20px; padding: 15px 30px;">
-                Login to Order
+                Login / Register
             </a>
         </div>
-        <p style="margin: 20px 0;">
-            Don't have an account? <a href="auth/register.php">Register here</a>
-        </p>
     <?php endif; ?>
 </div>
 
@@ -60,6 +57,5 @@ include 'includes/header.php';
         </div>
     </div>
 </div>
-
 
 <?php include 'includes/footer.php'; ?>

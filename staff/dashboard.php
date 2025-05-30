@@ -72,7 +72,8 @@ include '../includes/header.php';
         <div style="margin: 20px 0;">
             <a href="manage_items.php" class="btn" style="display: block; margin: 10px 0;">Manage Menu Items</a>
             <a href="manage_orders.php" class="btn" style="display: block; margin: 10px 0;">Manage Orders</a>
-            <a href="generate.php" class="btn" style="display: block; margin: 10px 0; background: #f39c12;">🔳 Generate QR Codes</a>
+            <!-- In the Quick Actions section -->
+            <a href="generate.php" class="btn" style="display: block; margin: 10px 0; background: #f39c12;">🔳 Generate Restaurant QR Code</a>
          </div>
     </div>
     
