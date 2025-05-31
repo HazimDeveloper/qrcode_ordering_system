@@ -381,22 +381,78 @@ document.addEventListener('keydown', function(e) {
 });
 
 // Update cart count dynamically (if on cart-related pages)
+// FIXED: Update cart count dynamically with proper error handling
 function updateCartCount() {
+    // Only run for logged-in users
+    const isLoggedIn = <?php echo isLoggedIn() ? 'true' : 'false'; ?>;
+    if (!isLoggedIn) {
+        return; // Exit early if user not logged in
+    }
+    
+    // Check if cart badge element exists
+    const cartBadge = document.querySelector('.nav-links a[href*="cart"] span');
+    if (!cartBadge) {
+        return; // Exit if cart badge doesn't exist on this page
+    }
+    
+    // Make the API request with proper error handling
     fetch('/qr-food-ordering/api/cart_count.php')
-        .then(response => response.json())
+        .then(response => {
+            // Check if the response is ok
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            // Check if response is actually JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server did not return JSON');
+            }
+            
+            return response.json();
+        })
         .then(data => {
-            const cartBadge = document.querySelector('.nav-links a[href*="cart"] span');
-            if (cartBadge && data.count !== undefined) {
+            // Check if the API response indicates success
+            if (data.success) {
+                // Update cart badge with new count
                 if (data.count > 0) {
                     cartBadge.textContent = data.count;
                     cartBadge.style.display = 'inline';
                 } else {
                     cartBadge.style.display = 'none';
                 }
+            } else {
+                console.log('Cart count API returned error:', data.message);
             }
         })
-        .catch(error => console.log('Cart count update failed:', error));
+        .catch(error => {
+            // Silently handle errors to avoid console spam
+            // Only log in development mode
+            if (window.location.hostname === 'localhost') {
+                console.log('Cart count update failed:', error.message);
+            }
+        });
 }
+
+// Initialize cart count functionality on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Update cart count immediately when page loads
+    updateCartCount();
+    
+    // Set up automatic updates only if user is logged in
+    const isLoggedIn = <?php echo isLoggedIn() ? 'true' : 'false'; ?>;
+    if (isLoggedIn) {
+        // Update cart count every 30 seconds
+        setInterval(updateCartCount, 30000);
+        
+        // Also update when page becomes visible again (user switches back to tab)
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                updateCartCount();
+            }
+        });
+    }
+});
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
