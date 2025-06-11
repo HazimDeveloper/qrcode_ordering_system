@@ -494,6 +494,6 @@ INSERT INTO `menu_items` (`name`, `description`, `price`, `image`, `created_at`,
 
 -- Insert global QR code
 INSERT INTO `qr_codes` (`table_number`, `qr_url`, `generated_by`, `restaurant_name`, `is_active`) VALUES
-(NULL, 'https://qr-code-online.infinityfreeapp.com', 1, 'QR Food Ordering', 1);
+(NULL, 'qrfoodordering.website', 1, 'QR Food Ordering', 1);
 
 COMMIT;

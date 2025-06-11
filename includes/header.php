@@ -61,7 +61,7 @@
                     </li>
                     
                     <li><a href="/qr-food-ordering/customer/order_history.php">📜 Orders</a></li>
-                    <li><a href="/qr-food-ordering/customer/book_table.php">📅 Book Table</a></li>
+                    <li><a href="/qr-food-ordering/customer/book_table_enhanced.php">📅 Book Table</a></li>
                     
                     <!-- Staff-only Links -->
                     <?php if (isStaff()): ?>
